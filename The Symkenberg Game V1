@@ -1,0 +1,120 @@
+// Flappy Bird Clone in React with TailwindCSS and shadcn/ui
+// This is a simplified game setup with core features: game loop, obstacle generation, difficulty increase, and UI
+
+import React, { useEffect, useRef, useState } from 'react';
+import { Button } from "@/components/ui/button"
+import { Slider } from "@/components/ui/slider"
+
+const themes = ['bg-sky-500', 'bg-green-600', 'bg-yellow-400', 'bg-purple-500'];
+
+export default function FlappyGame() {
+  const canvasRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [volume, setVolume] = useState(50);
+  const [score, setScore] = useState(0);
+  const [themeIndex, setThemeIndex] = useState(0);
+  const [resetToggle, setResetToggle] = useState(false);
+
+  const bird = useRef({ y: 150, velocity: 0 });
+  const pipes = useRef([]);
+  const gameSpeed = useRef(2);
+  const gravity = 0.5;
+
+  const flap = () => {
+    bird.current.velocity = -8;
+  };
+
+  const resetGame = () => {
+    bird.current = { y: 150, velocity: 0 };
+    pipes.current = [];
+    gameSpeed.current = 2;
+    setScore(0);
+    setIsPlaying(false);
+    setResetToggle(!resetToggle);
+  };
+
+  const draw = (ctx) => {
+    ctx.clearRect(0, 0, 400, 600);
+
+    // Draw bird
+    ctx.fillStyle = 'red';
+    ctx.beginPath();
+    ctx.arc(80, bird.current.y, 15, 0, 2 * Math.PI);
+    ctx.fill();
+
+    // Draw pipes
+    ctx.fillStyle = 'green';
+    pipes.current.forEach(pipe => {
+      ctx.fillRect(pipe.x, 0, 50, pipe.top);
+      ctx.fillRect(pipe.x, pipe.bottom, 50, 600);
+    });
+  };
+
+  const update = () => {
+    bird.current.velocity += gravity;
+    bird.current.y += bird.current.velocity;
+
+    if (bird.current.y > 600 || bird.current.y < 0) {
+      resetGame();
+    }
+
+    // Move pipes
+    pipes.current = pipes.current.map(pipe => ({ ...pipe, x: pipe.x - gameSpeed.current }));
+
+    // Remove and add pipes
+    if (pipes.current.length === 0 || pipes.current[pipes.current.length - 1].x < 200) {
+      const top = Math.random() * 200 + 50;
+      pipes.current.push({ x: 400, top, bottom: top + 120 });
+    }
+    if (pipes.current[0].x < -50) {
+      pipes.current.shift();
+      setScore(prev => prev + 1);
+    }
+
+    // Collision detection
+    pipes.current.forEach(pipe => {
+      if (pipe.x < 100 && pipe.x + 50 > 60 && (bird.current.y < pipe.top || bird.current.y > pipe.bottom)) {
+        resetGame();
+      }
+    });
+
+    // Increase difficulty
+    if (score > 0 && score % 5 === 0) {
+      gameSpeed.current += 0.01;
+      setThemeIndex((prev) => (prev + 1) % themes.length);
+    }
+  };
+
+  useEffect(() => {
+    const ctx = canvasRef.current.getContext('2d');
+    let animationFrameId;
+
+    const render = () => {
+      update();
+      draw(ctx);
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    if (isPlaying) {
+      render();
+    }
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isPlaying, resetToggle]);
+
+  return (
+    <div className={`w-full h-full flex flex-col items-center justify-center gap-4 p-4 ${themes[themeIndex]}`}>
+      <h1 className="text-white text-2xl font-bold">Flappy Game</h1>
+      <canvas ref={canvasRef} width={400} height={600} className="border-4 border-white rounded-2xl" />
+      <div className="flex gap-4 items-center">
+        <Button onClick={() => setIsPlaying(!isPlaying)}>{isPlaying ? 'Pause' : 'Start'}</Button>
+        <Button onClick={resetGame}>Reset</Button>
+      </div>
+      <div className="w-64">
+        <p className="text-white text-sm">Lautstärke</p>
+        <Slider defaultValue={[volume]} max={100} step={1} onValueChange={([v]) => setVolume(v)} />
+      </div>
+      <p className="text-white text-xl">Score: {score}</p>
+    </div>
+  );
+}
